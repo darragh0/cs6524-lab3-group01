@@ -29,11 +29,11 @@ Limerick, Ireland \\
 Limerick, Ireland\\
 23370858@studentmail.ul.ie}
 \and
-\IEEEauthorblockN{2\textsuperscript{nd} Given Name Surname}
-\IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
-\textit{name of organization (of Aff.)}\\
-City, Country \\
-email address or ORCID}
+\IEEEauthorblockN{3\textsuperscript{rd} Darragh Luby}
+\IEEEauthorblockA{\textit{Immersive Software Engineering} \\
+\textit{University of Limerick}\\
+Limerick, Ireland\\
+23359048@studentmail.ul.ie}
 }
 
 \maketitle
@@ -53,7 +53,9 @@ SIFT (Scale-Invariant Feature Transform) was used to detect distinctive keypoint
 For every consecutive frame pair, SIFT keypoints were matched and filtered using a Lowe ratio test. The resulting correspondences were used to estimate the essential matrix \(E\) with cv2.findEssentialMat, using the calibrated intrinsic matrix \(K\). The relative rotation \(R\) and translation \(t\) were then recovered using cv2.recoverPose, which selects the pose solution consistent with positive-depth constraints.
 Before matching, frames were undistorted using the calibrated distortion coefficients. This reduced radial and tangential lens distortion and improved the geometric consistency of feature correspondences. The recovered translation is unit length, so it defines the direction of relative camera motion.
 
-\subsection{Step 4}
+\subsection{Step 4: Two-View Triangulation and Reprojection Error}
+For every frame pair with a recovered pose, the first camera was fixed at the origin, \(P_1 = K[I \mid 0]\), and the second placed using the Step 3 pose, \(P_2 = K[R \mid t]\). Only matches that passed the positive-depth check in cv2.recoverPose were used. These were triangulated with cv2.triangulatePoints and converted from homogeneous to 3D coordinates. Points behind either camera were discarded.
+Each 3D point was then projected back into both frames and compared with its original pixel; the mean of the two distances is its reprojection error. Points with an error above 4\,px were rejected. On video A this gave a median error of 0.18\,px over 395 pairs with roughly 415 points per pair. Video B gave a similar error (0.23\,px) but only 108 usable pairs with about 14 points each, because most matches lie on the static background, which does not move with the object. Since \(t\) has unit length, each pair's points sit at their own arbitrary scale, which Step 5 has to reconcile.
 
 \subsection{Step 5: Multi-Frame Least-Squares Optimisation}
 To extend the two-frame triangulation approach, consecutive frames were processed in non-overlapping groups of five. SIFT correspondences were linked across each group to track common features, retaining points observed in at least three frames. Initial 3D positions were estimated using multi-view triangulation and subsequently refined using SciPy's nonlinear least-squares optimiser with the Levenberg–Marquardt method. The optimisation minimised the squared reprojection errors across the available observations while keeping the estimated camera poses fixed. Points with invalid depth or excessive reprojection error were rejected, and RMS reprojection errors were calculated before and after refinement to assess the improvement.
@@ -64,7 +66,36 @@ Dense structure was reconstructed by back-projecting pixels from each frame into
 The resulting 3D points were accumulated across frames and averaged where multiple observations corresponded to the same surface region. Points with invalid depth estimates or insufficient support were removed before exporting the reconstruction. The final dense point cloud was saved as a coloured PLY file for each input video.
 Unlike the sparse reconstruction in Steps 4 and 5, this stage uses all valid pixels rather than only tracked feature points. 
 
-\subsection{Step 7}
+\subsection{Step 7: Sensitivity Analysis}
+The full pipeline (Steps 3--6) was re-run six times per video. For each run a copy of the calibration was written with \(f_x\) and \(f_y\) multiplied by 0.8, 1.0 or 1.2. For the ``distorted'' runs the distortion coefficients were set to zero, so cv2.undistort leaves the frames unchanged; this removes undistortion without changing any other code. Table~\ref{tab:sensitivity} summarises the results.
+
+\begin{table}[htbp]
+\caption{Sensitivity results (u = undistorted, d = distorted).}
+\label{tab:sensitivity}
+\centering
+\begin{tabular}{lcccc}
+\hline
+Run & Valid pairs & Step 4 err. (px) & Step 5 pts & Dense pts \\
+\hline
+a\_08u & 409 & 0.23 & 4701 & 82431 \\
+a\_10u & 395 & 0.18 & 4908 & 107653 \\
+a\_12u & 380 & 0.16 & 5125 & 124867 \\
+a\_08d & 410 & 0.14 & 6360 & 142015 \\
+a\_10d & 390 & 0.14 & 6450 & 155279 \\
+a\_12d & 383 & 0.14 & 7200 & 156447 \\
+\hline
+b\_08u & 134 & 0.23 & 4638 & 36158 \\
+b\_10u & 108 & 0.23 & 3977 & 33307 \\
+b\_12u & 126 & 0.24 & 4395 & 38502 \\
+b\_08d & 163 & 0.22 & 5706 & 56437 \\
+b\_10d & 147 & 0.22 & 6098 & 60076 \\
+b\_12d & 147 & 0.21 & 6582 & 62554 \\
+\hline
+\end{tabular}
+\end{table}
+
+On video A, a larger focal length recovered slightly fewer poses but kept more points per pair and gave a lower reprojection error. A low reprojection error only shows the points agree with the assumed camera; it does not show the shape is correct, since a wrong \(f\) stretches or flattens the scene in depth while staying self-consistent.
+Skipping undistortion unexpectedly produced more points in every case and equal or lower errors. A likely cause is the calibration itself: \(K\) places the principal point at (324,\,173), while the videos are 478\(\times\)850, whose centre is near (239,\,425). This suggests \(K\) and \(D\) were estimated at a different resolution or orientation, so ``correcting'' distortion with them warps the frames and loses matches.
 
 
 \section{Discussion and Failure Analysis}
