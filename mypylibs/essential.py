@@ -101,6 +101,7 @@ def estimate_video_motion(video_path, k_path, d_path, output_dir):
     previous = prepare(frame)
     frames = 1
     rotations, translations, essentials, records = [], [], [], []
+    pair_matches = []  # (pair_index, R, t, inlier points a, inlier points b) for step 4
     cumulative_r, cumulative_t = np.eye(3), np.zeros(3)
     pair_index = 0
     while True:
@@ -121,7 +122,7 @@ def estimate_video_motion(video_path, k_path, d_path, output_dir):
             )
             if essential is not None:
                 essential = essential[:3, :3]
-                inliers, rotation, t, _ = cv2.recoverPose(
+                inliers, rotation, t, pose_mask = cv2.recoverPose(
                     essential, points_a, points_b, cameraMatrix=k, mask=mask
                 )
                 translation = t.reshape(3)
@@ -132,6 +133,8 @@ def estimate_video_motion(video_path, k_path, d_path, output_dir):
             # returned by recoverPose (scale remains unknown).
             cumulative_t = cumulative_t - cumulative_r @ rotation.T @ translation
             cumulative_r = cumulative_r @ rotation.T
+            in_front = pose_mask.ravel() > 0
+            pair_matches.append((pair_index, rotation, translation, points_a[in_front], points_b[in_front]))
             rotations.append(rotation)
             translations.append(translation)
             essentials.append(essential)
@@ -173,4 +176,5 @@ def estimate_video_motion(video_path, k_path, d_path, output_dir):
         'frames': frames,
         'pairs': len(records),
         'valid_pairs': sum(row[2] for row in records),
+        'pair_matches': pair_matches,
     }

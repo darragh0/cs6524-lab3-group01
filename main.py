@@ -1,4 +1,4 @@
-"""Run keypoint matching (step 2) and adjacent-frame motion (step 3)."""
+"""Run keypoint matching (step 2), adjacent-frame motion (step 3) and triangulation (step 4)."""
 
 from pathlib import Path
 
@@ -7,6 +7,7 @@ import numpy as np
 
 from mypylibs.essential import estimate_video_motion
 from mypylibs.keypoint_matching import match_keypoints, visualise_matches
+from mypylibs.triangulation import triangulate
 
 
 ROOT = Path(__file__).resolve().parent
@@ -77,6 +78,24 @@ def process_keypoint_matches(video_name, video_path, num_frames=30):
     print(f"Step 2 visualisations: {output_folder}")
 
 
+def report_triangulation(video_name, k, pair_matches):
+    """Run step 4 on every recovered pair and print reprojection error stats."""
+    errors, kept = [], []
+    for _, rotation, translation, points_a, points_b in pair_matches:
+        result = triangulate(points_a, points_b, k, rotation, translation)
+        if len(result.points_3d):
+            errors.append(result.mean_error)
+            kept.append(len(result.points_3d))
+    if not errors:
+        print(f"Step 4 {video_name}: no pairs triangulated")
+        return
+    print(
+        f"Step 4 {video_name}: {len(errors)} pairs triangulated, "
+        f"reprojection error median {np.median(errors):.3f} px "
+        f"(max {np.max(errors):.3f}), median {np.median(kept):.0f} points per pair"
+    )
+
+
 def main():
     videos = {
         "a": next((p for p in (INPUTS / "a.mp4", INPUTS / "spinCamera.mp4") if p.exists()), None),
@@ -101,6 +120,8 @@ def main():
             f"{summary['pairs']} adjacent pairs, "
             f"{summary['valid_pairs']} recovered motions"
         )
+        k = np.loadtxt(str(k_path), delimiter=",").reshape(3, 3)
+        report_triangulation(video.name, k, summary["pair_matches"])
 
 
 if __name__ == "__main__":
