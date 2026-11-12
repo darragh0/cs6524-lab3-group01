@@ -12,6 +12,7 @@ from mypylibs.essential import estimate_video_motion
 from mypylibs.keypoint_matching import match_keypoints, visualise_matches
 from mypylibs.triangulation import triangulate
 from mypylibs.multiframe_sfm import optimize_video_five_frames
+from mypylibs.dense import reconstruct_dense_cloud
 
 
 ROOT = Path(__file__).resolve().parent
@@ -263,6 +264,20 @@ def main():
             f"Step 5 {label}: "
             f"{step5['windows']} windows, "
             f"{step5['points']} refined points"
+        )
+
+        # Step 6
+        cloud = reconstruct_dense_cloud(
+            video,
+            k_path,
+            d_path,
+            OUTPUTS / label / "pair_motion.csv",
+            OUTPUTS / label / "dense_cloud.ply",
+            step5_points=OUTPUTS / label / "five_frame_points.csv",
+        )
+        print(
+            f"Step 6 {label}: wrote {cloud['points']} colored points "
+            f"to {cloud['output']}"
         )
 
 
