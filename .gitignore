@@ -7,3 +7,8 @@
 *.log
 *.run.xml
 *.pdf
+
+__pycache__/
+.venv/
+pyproject.toml
+uv.lock
