@@ -1,4 +1,4 @@
-\documentclass[conference]{assets/latex/IEEEtran}
+\documentclass[conference]{IEEEtran}
 \IEEEoverridecommandlockouts
 % The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
 %Template version as of 6/27/2024
@@ -17,11 +17,11 @@
 
 \title{CS6524 Computer Vision Lab. 3\\ Structure from Motion}
 
-\author{\IEEEauthorblockN{1\textsuperscript{st} Given Name Surname}
-\IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
-\textit{name of organization (of Aff.)}\\
-City, Country \\
-email address or ORCID}
+\author{\IEEEauthorblockN{1\textsuperscript{st} Dawid Jakubowski}
+\IEEEauthorblockA{\textit{Immersive Software Engineering} \\
+\textit{University of Limerick}\\
+Limerick, Ireland \\
+23384549@studentmail.ul.ie}
 \and
 \IEEEauthorblockN{2\textsuperscript{nd} Given Name Surname}
 \IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
@@ -38,70 +38,32 @@ email address or ORCID}
 
 \maketitle
 
-\begin{abstract}
-Describe in few words the work done, the lessons learned, and results.
-\end{abstract}
 
 \section{Introduction}
-This document contains some examples of basic {\LaTeX} functions.
+This lab investigates Structure from Motion (SfM), a computer vision technique used to reconstruct 3D structures from multiple 2D images. Two video configurations were examined. One in which the camera moves around a stationary object and another in which the object rotates while the camera remains stationary. The reconstruction pipeline involves feature detection and matching, camera motion estimation, 3D triangulation, multi-frame optimisation, and dense reconstruction. A sensitivity analysis is also conducted to evaluate how changes in focal length and lens distortion affect reconstruction accuracy.
 
-\subsection{Lists}
+\section{Methodology}
+\subsection{Step 1: Recording videos}
+We recorded 2 videos on the same phone of the same object. We chose a knight figure from chess as our object of interest as it has a unique shape that looks different from each side. Video A kept the knight in a fixed position and we moved the phone in a circle around the knight completing a 360∘ range. Video B kept the phone in a fixed position, we put the knight on a piece of paper and rotated the piece of paper, hence rotating the knight. 
 
-List can be bulleted\dots
-\begin{itemize}
-\item First
-\item Second
-\item Third
-\end{itemize}
+\subsection{Step 2: Keypoint Detection and Matching}
+SIFT (Scale-Invariant Feature Transform) was used to detect distinctive keypoints and extract feature descriptors from selected video frames. Rather than processing every consecutive frame pair, 30 frame pairs were sampled at intervals throughout each video to evaluate feature matching across different viewpoints. Corresponding keypoints were identified using a brute-force matcher, with Lowe's ratio test applied to reject ambiguous matches. The number of successful matches and their pixel displacements were recorded to assess matching performance and the effect of viewpoint changes.
 
-Or enumerated
 
-\begin{enumerate}
-\item First
-\item Second
-\item Third
-\end{enumerate}
+\subsection{Step 3}
 
-\subsection{Equations}
+\subsection{Step 4}
 
-Equations can have their own environment,
-\begin{equation}
-a+b=\gamma\label{eq}
-\end{equation}
-and be reference (Equation~\ref{eq}), or can be inline and blend in the text like this: $\sum_{i=0}^{N}x_i$, like any other word.
+\subsection{Step 5: Multi-Frame Least-Squares Optimisation}
+To extend the two-frame triangulation approach, consecutive frames were processed in non-overlapping groups of five. SIFT correspondences were linked across each group to track common features, retaining points observed in at least three frames. Initial 3D positions were estimated using multi-view triangulation and subsequently refined using SciPy's nonlinear least-squares optimiser with the Levenberg–Marquardt method. The optimisation minimised the squared reprojection errors across the available observations while keeping the estimated camera poses fixed. Points with invalid depth or excessive reprojection error were rejected, and RMS reprojection errors were calculated before and after refinement to assess the improvement.
 
-\subsection{Figures and Tables}
 
-\begin{table}
-\caption{Table Type Styles}
-\begin{center}
-\begin{tabular}{|c|c|c|c|}
-\hline
-\textbf{Table}&\multicolumn{3}{|c|}{\textbf{Table Column Head}} \\
-\cline{2-4} 
-\textbf{Head} & \textbf{\textit{Table column subhead}}& \textbf{\textit{Subhead}}& \textbf{\textit{Subhead}} \\
-\hline
-copy& More table copy$^{\mathrm{a}}$& &  \\
-\hline
-\multicolumn{4}{l}{$^{\mathrm{a}}$Sample of a Table footnote.}
-\end{tabular}
-\label{tab1}
-\end{center}
-\end{table}
+\subsection{Step 6}
 
-\begin{figure}
-% Uncomment the line below to include an image from a source file
-\centerline{\includegraphics{fig1.png}}
-\caption{Example of a figure caption.}
-\label{fig}
-\end{figure}
+\subsection{Step 7}
 
-They appear by default on top of the text, and you reference like this: Figure~\ref{fig} and Table~\ref{tab1}.
 
-\subsection{Citations}
+\section{Discussion and Failure Analysis}
 
-If you need to cite external sources, use the \texttt{assets/latex/report.bib} file. As an example, here's how you cite the textbook~\cite{foundationsCVbook}.
-
-\printbibliography
 
 \end{document}
