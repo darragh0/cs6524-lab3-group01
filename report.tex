@@ -23,11 +23,11 @@
 Limerick, Ireland \\
 23384549@studentmail.ul.ie}
 \and
-\IEEEauthorblockN{2\textsuperscript{nd} Given Name Surname}
-\IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
-\textit{name of organization (of Aff.)}\\
-City, Country \\
-email address or ORCID}
+\IEEEauthorblockN{2\textsuperscript{nd} James Kelly}
+\IEEEauthorblockA{\textit{Immersive Software Engineering} \\
+\textit{University of Limerick}\\
+Limerick, Ireland\\
+23370858@studentmail.ul.ie}
 \and
 \IEEEauthorblockN{2\textsuperscript{nd} Given Name Surname}
 \IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
@@ -44,13 +44,14 @@ This lab investigates Structure from Motion (SfM), a computer vision technique u
 
 \section{Methodology}
 \subsection{Step 1: Recording videos}
-We recorded 2 videos on the same phone of the same object. We chose a knight figure from chess as our object of interest as it has a unique shape that looks different from each side. Video A kept the knight in a fixed position and we moved the phone in a circle around the knight completing a 360∘ range. Video B kept the phone in a fixed position, we put the knight on a piece of paper and rotated the piece of paper, hence rotating the knight. 
+We recorded 2 videos on the same phone of the same object. We chose a knight figure from chess as our object of interest as it has a unique shape that looks different from each side. Video A kept the knight in a fixed position and we moved the phone in a circle around the knight completing a $360^\circ$ range. Video B kept the phone in a fixed position, we put the knight on a piece of paper and rotated the piece of paper, hence rotating the knight. 
 
 \subsection{Step 2: Keypoint Detection and Matching}
 SIFT (Scale-Invariant Feature Transform) was used to detect distinctive keypoints and extract feature descriptors from selected video frames. Rather than processing every consecutive frame pair, 30 frame pairs were sampled at intervals throughout each video to evaluate feature matching across different viewpoints. Corresponding keypoints were identified using a brute-force matcher, with Lowe's ratio test applied to reject ambiguous matches. The number of successful matches and their pixel displacements were recorded to assess matching performance and the effect of viewpoint changes.
 
-
-\subsection{Step 3}
+\subsection{ Step 3:Essential Matrices and Relative Pose}
+For every consecutive frame pair, SIFT keypoints were matched and filtered using a Lowe ratio test. The resulting correspondences were used to estimate the essential matrix \(E\) with cv2.findEssentialMat, using the calibrated intrinsic matrix \(K\). The relative rotation \(R\) and translation \(t\) were then recovered using cv2.recoverPose, which selects the pose solution consistent with positive-depth constraints.
+Before matching, frames were undistorted using the calibrated distortion coefficients. This reduced radial and tangential lens distortion and improved the geometric consistency of feature correspondences. The recovered translation is unit length, so it defines the direction of relative camera motion.
 
 \subsection{Step 4}
 
@@ -58,7 +59,10 @@ SIFT (Scale-Invariant Feature Transform) was used to detect distinctive keypoint
 To extend the two-frame triangulation approach, consecutive frames were processed in non-overlapping groups of five. SIFT correspondences were linked across each group to track common features, retaining points observed in at least three frames. Initial 3D positions were estimated using multi-view triangulation and subsequently refined using SciPy's nonlinear least-squares optimiser with the Levenberg–Marquardt method. The optimisation minimised the squared reprojection errors across the available observations while keeping the estimated camera poses fixed. Points with invalid depth or excessive reprojection error were rejected, and RMS reprojection errors were calculated before and after refinement to assess the improvement.
 
 
-\subsection{Step 6}
+\subsection{Step 6:Dense Structure from Motion}
+Dense structure was reconstructed by back-projecting pixels from each frame into 3D space using the calibrated intrinsics and estimated camera extrinsics. For each frame, pixel coordinates were unprojected using the camera projection model and transformed using the relative pose estimated from the preceding frame pair.
+The resulting 3D points were accumulated across frames and averaged where multiple observations corresponded to the same surface region. Points with invalid depth estimates or insufficient support were removed before exporting the reconstruction. The final dense point cloud was saved as a coloured PLY file for each input video.
+Unlike the sparse reconstruction in Steps 4 and 5, this stage uses all valid pixels rather than only tracked feature points. 
 
 \subsection{Step 7}
 
