@@ -1,145 +1,106 @@
+"""Run keypoint matching (step 2) and adjacent-frame motion (step 3)."""
+
+from pathlib import Path
 
 import cv2
-import os
 import numpy as np
 
-from mypylibs.keypoint_matching import (
-    match_keypoints,
-    visualise_matches
-)
+from mypylibs.essential import estimate_video_motion
+from mypylibs.keypoint_matching import match_keypoints, visualise_matches
 
 
-def process_video(video_name, num_frames=30):
+ROOT = Path(__file__).resolve().parent
+INPUTS = ROOT / "in"
+OUTPUTS = ROOT / "out"
 
-    video_path = f"in/{video_name}.mp4"
 
-    # Create separate output folder for each video
-    output_folder = f"out/{video_name}_matches"
-    os.makedirs(output_folder, exist_ok=True)
-
-    cap = cv2.VideoCapture(video_path)
-
+def process_keypoint_matches(video_name, video_path, num_frames=30):
+    """Run step 2 on evenly spaced frame samples and save match visualisations."""
+    output_folder = OUTPUTS / f"{video_name}_matches"
+    output_folder.mkdir(parents=True, exist_ok=True)
+    cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
-        print(f"Could not open {video_path}")
-        return
+        raise OSError(f"Could not open video: {video_path}")
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-    # Select evenly spaced frames
-    frame_indices = np.unique(
-        np.linspace(
-            0,
-            total_frames - 1,
-            min(num_frames, total_frames),
-            dtype=int
-        )
-    )
-
-    previous_frame = None
-    previous_index = None
-
-    match_counts = []
-    displacements = []
+    if total_frames <= 0:
+        cap.release()
+        raise ValueError(f"Video contains no frames: {video_path}")
+    frame_indices = np.unique(np.linspace(
+        0, total_frames - 1, min(num_frames, total_frames), dtype=int
+    ))
+    previous_frame = previous_index = None
+    match_counts, displacements = [], []
 
     for frame_index in frame_indices:
-
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_index))
-        ret, current_frame = cap.read()
-
-        if not ret:
+        ok, frame = cap.read()
+        if not ok:
             continue
-
         if previous_frame is not None:
-
-            # Match SIFT keypoints
-            pts1, pts2 = match_keypoints(
-                previous_frame,
-                current_frame
+            points_a, points_b = match_keypoints(previous_frame, frame)
+            count = len(points_a)
+            match_counts.append(count)
+            median_displacement = (
+                float(np.median(np.linalg.norm(points_b - points_a, axis=1)))
+                if count else 0.0
             )
-
-            number_of_matches = len(pts1)
-            match_counts.append(number_of_matches)
-
-            # Calculate displacement
-            if number_of_matches > 0:
-
-                distances = np.linalg.norm(
-                    pts2 - pts1,
-                    axis=1
-                )
-
-                median_displacement = np.median(distances)
+            if count:
                 displacements.append(median_displacement)
-
-            else:
-                median_displacement = 0
-
-            print(
-                f"Video {video_name} | "
-                f"Frames {previous_index}-{frame_index} | "
-                f"Matches: {number_of_matches} | "
-                f"Median displacement: {median_displacement:.2f} px"
-            )
-
-            # Generate matching visualisation
             visualisation = visualise_matches(
-                previous_frame,
-                current_frame,
-                pts1,
-                pts2,
-                max_matches=100
+                previous_frame, frame, points_a, points_b, max_matches=100
             )
-
-            # Add frame information
             cv2.putText(
                 visualisation,
-                f"Frames {previous_index}-{frame_index} | Matches: {number_of_matches}",
-                (20, 40),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (0, 255, 255),
-                2
+                f"Frames {previous_index}-{frame_index} | Matches: {count}",
+                (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
+                (0, 255, 255), 2,
             )
-
-            # Save image for this frame pair
-            output_path = os.path.join(
-                output_folder,
-                f"matches_{previous_index:04d}_{frame_index:04d}.jpg"
+            output_path = output_folder / f"matches_{previous_index:04d}_{frame_index:04d}.jpg"
+            cv2.imwrite(str(output_path), visualisation)
+            print(
+                f"Step 2 {video_name} | frames {previous_index}-{frame_index} | "
+                f"matches: {count} | median displacement: {median_displacement:.2f} px"
             )
-
-            cv2.imwrite(output_path, visualisation)
-
-        previous_frame = current_frame
-        previous_index = frame_index
-
+        previous_frame, previous_index = frame, int(frame_index)
     cap.release()
 
-    # Print summary
     if match_counts:
-
-        print(f"\n--- {video_name} Summary ---")
-        print(f"Total video frames: {total_frames}")
-        print(f"Selected frames: {len(frame_indices)}")
-        print(f"Pairs processed: {len(match_counts)}")
-        print(f"Average matches: {np.mean(match_counts):.2f}")
-        print(f"Minimum matches: {np.min(match_counts)}")
-        print(f"Maximum matches: {np.max(match_counts)}")
-
-        if displacements:
-            print(
-                f"Average median displacement: "
-                f"{np.mean(displacements):.2f} px"
-            )
-
-        print(f"Images saved to: {output_folder}\n")
+        print(
+            f"Step 2 {video_name}: {len(match_counts)} sampled pairs, "
+            f"mean matches {np.mean(match_counts):.1f}, "
+            f"range {min(match_counts)}-{max(match_counts)}, "
+            f"mean median displacement "
+            f"{np.mean(displacements):.2f} px" if displacements else
+            f"Step 2 {video_name}: {len(match_counts)} sampled pairs; no matches found"
+        )
+    print(f"Step 2 visualisations: {output_folder}")
 
 
 def main():
+    videos = {
+        "a": next((p for p in (INPUTS / "a.mp4", INPUTS / "spinCamera.mp4") if p.exists()), None),
+        "b": next((p for p in (INPUTS / "b.mp4", INPUTS / "spinHorse.mp4") if p.exists()), None),
+    }
+    missing = [name for name, video in videos.items() if video is None]
+    if missing:
+        raise FileNotFoundError(f"Missing video(s) for {', '.join(missing)} in {INPUTS}.")
 
-    os.makedirs("out", exist_ok=True)
+    k_path = next((p for p in (INPUTS / "K.csv", INPUTS / "k.csv") if p.exists()), None)
+    d_path = next((p for p in (INPUTS / "D.csv", INPUTS / "d.csv") if p.exists()), None)
+    if k_path is None or d_path is None:
+        raise FileNotFoundError("Step 3 requires the camera calibration files in in/K.csv and in/D.csv.")
 
-    process_video("spinCamera", num_frames=30)
-    process_video("spinHorse", num_frames=30)
+    OUTPUTS.mkdir(parents=True, exist_ok=True)
+    for label, video in videos.items():
+        process_keypoint_matches(video.stem, video)
+        print(f"Estimating Step 3 camera motion for {video.name}...")
+        summary = estimate_video_motion(video, k_path, d_path, OUTPUTS / label)
+        print(
+            f"Step 3 {video.name}: {summary['frames']} frames, "
+            f"{summary['pairs']} adjacent pairs, "
+            f"{summary['valid_pairs']} recovered motions"
+        )
 
 
 if __name__ == "__main__":
