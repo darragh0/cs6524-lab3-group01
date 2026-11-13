@@ -46,16 +46,30 @@ This lab investigates Structure from Motion (SfM), a computer vision technique u
 \subsection{Step 1: Recording videos}
 We recorded 2 videos on the same phone of the same object. We chose a knight figure from chess as our object of interest as it has a unique shape that looks different from each side. Video A kept the knight in a fixed position and we moved the phone in a circle around the knight completing a $360^\circ$ range. Video B kept the phone in a fixed position, we put the knight on a piece of paper and rotated the piece of paper, hence rotating the knight. 
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.45\columnwidth]{frame_a.jpg}\hfill
+\includegraphics[width=0.45\columnwidth]{frame_b.jpg}
+\caption{One frame from each video. Left: video A (camera moves around the knight). Right: video B (knight rotates on paper, camera still).}
+\label{fig:frames}
+\end{figure}
+
 \subsection{Step 2: Keypoint Detection and Matching}
 SIFT (Scale-Invariant Feature Transform) was used to detect distinctive keypoints and extract feature descriptors from selected video frames. Rather than processing every consecutive frame pair, 30 frame pairs were sampled at intervals throughout each video to evaluate feature matching across different viewpoints. Corresponding keypoints were identified using a brute-force matcher, with Lowe's ratio test applied to reject ambiguous matches. The number of successful matches and their pixel displacements were recorded to assess matching performance and the effect of viewpoint changes.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\columnwidth]{matches_a.jpg}
+\caption{SIFT matches between frames 154 and 169 of video A (139 matches, 100 drawn). Each line joins the same spot in both frames.}
+\label{fig:matches}
+\end{figure}
 
 \subsection{ Step 3:Essential Matrices and Relative Pose}
 For every consecutive frame pair, SIFT keypoints were matched and filtered using a Lowe ratio test. The resulting correspondences were used to estimate the essential matrix \(E\) with cv2.findEssentialMat, using the calibrated intrinsic matrix \(K\). The relative rotation \(R\) and translation \(t\) were then recovered using cv2.recoverPose, which selects the pose solution consistent with positive-depth constraints.
 Before matching, frames were undistorted using the calibrated distortion coefficients. This reduced radial and tangential lens distortion and improved the geometric consistency of feature correspondences. The recovered translation is unit length, so it defines the direction of relative camera motion.
 
-\subsection{Step 4: Two-View Triangulation and Reprojection Error}
-For every frame pair with a recovered pose, the first camera was fixed at the origin, \(P_1 = K[I \mid 0]\), and the second placed using the Step 3 pose, \(P_2 = K[R \mid t]\). Only matches that passed the positive-depth check in cv2.recoverPose were used. These were triangulated with cv2.triangulatePoints and converted from homogeneous to 3D coordinates. Points behind either camera were discarded.
-Each 3D point was then projected back into both frames and compared with its original pixel; the mean of the two distances is its reprojection error. Points with an error above 4\,px were rejected. On video A this gave a median error of 0.18\,px over 395 pairs with roughly 415 points per pair. Video B gave a similar error (0.23\,px) but only 108 usable pairs with about 14 points each, because most matches lie on the static background, which does not move with the object. Since \(t\) has unit length, each pair's points sit at their own arbitrary scale, which Step 5 has to reconcile.
+\subsection{Step 4: Triangulation and Reprojection Error}
+For each pair of consecutive frames, we placed the first camera at the centre of our 3D space. From step 3, we knew how the camera transformed through space between the two frames, so we placed the second camera at that position relative to the first. We then used cv2.triangulatePoints to calculate the 3D position of each matched point, and omitted points behind either camera. After this, we calculated the reprojection error. Points more than 4 pixels off were removed. Video A had a median error of 0.18 pixels across 395 frame pairs, with about 415 points per pair. Video B had a similar error (0.23 pixels) but only 108 usable pairs with about 14 points each, because most of its matches were on the background, which remains stationary. Step 3 only gives the direction the camera moved, not the distance, so the size of the reconstruction is arbitrary, and each pair's points can come out at a slightly different size.
 
 \subsection{Step 5: Multi-Frame Least-Squares Optimisation}
 To extend the two-frame triangulation approach, consecutive frames were processed in non-overlapping groups of five. SIFT correspondences were linked across each group to track common features, retaining points observed in at least three frames. Initial 3D positions were estimated using multi-view triangulation and subsequently refined using SciPy's nonlinear least-squares optimiser with the Levenberg–Marquardt method. The optimisation minimised the squared reprojection errors across the available observations while keeping the estimated camera poses fixed. Points with invalid depth or excessive reprojection error were rejected, and RMS reprojection errors were calculated before and after refinement to assess the improvement.
@@ -67,7 +81,7 @@ The resulting 3D points were accumulated across frames and averaged where multip
 Unlike the sparse reconstruction in Steps 4 and 5, this stage uses all valid pixels rather than only tracked feature points. 
 
 \subsection{Step 7: Sensitivity Analysis}
-The full pipeline (Steps 3--6) was re-run six times per video. For each run a copy of the calibration was written with \(f_x\) and \(f_y\) multiplied by 0.8, 1.0 or 1.2. For the ``distorted'' runs the distortion coefficients were set to zero, so cv2.undistort leaves the frames unchanged; this removes undistortion without changing any other code. Table~\ref{tab:sensitivity} summarises the results.
+We ran the whole pipeline (Steps 3--6) six times per video. Each run used a copy of the camera calibration with the focal length multiplied by 0.8, 1.0 or 1.2. For the runs without undistortion, we set the distortion values to zero, so the frames were left as recorded. Table~\ref{tab:sensitivity} shows the results.
 
 \begin{table}[htbp]
 \caption{Sensitivity results (u = undistorted, d = distorted).}
@@ -94,9 +108,17 @@ b\_12d & 147 & 0.21 & 6582 & 62554 \\
 \end{tabular}
 \end{table}
 
-On video A, a larger focal length recovered slightly fewer poses but kept more points per pair and gave a lower reprojection error. A low reprojection error only shows the points agree with the assumed camera; it does not show the shape is correct, since a wrong \(f\) stretches or flattens the scene in depth while staying self-consistent.
-Skipping undistortion unexpectedly produced more points in every case and equal or lower errors. A likely cause is the calibration itself: \(K\) places the principal point at (324,\,173), while the videos are 478\(\times\)850, whose centre is near (239,\,425). This suggests \(K\) and \(D\) were estimated at a different resolution or orientation, so ``correcting'' distortion with them warps the frames and loses matches.
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\columnwidth]{clouds_a.jpg}
+\caption{Dense point clouds for video A at focal factor 1.0, seen from the first camera. Left: with undistortion (a\_10u). Right: without (a\_10d). Grey points are mostly carpet and orange points the wooden cabinet; the knight is not clearly visible.}
+\label{fig:clouds}
+\end{figure}
 
+
+On video A, a larger focal length found slightly fewer camera motions but kept more points and had a lower reprojection error. However, a low error doesn't mean the shape is right. It only means the points agree with the camera settings we gave the pipeline, and a wrong focal length stretches or squashes the depth of the scene.
+
+Turning off undistortion gave more points in every run, with the same or lower error. This is likely a problem with our calibration. It puts the image centre at (324, 173), but our videos are 478 by 850 pixels, so the real centre is around (239, 425). The calibration was probably done at a different resolution or orientation, so correcting the frames with it might warp them and lose matches.
 
 \section{Discussion and Failure Analysis}
 
