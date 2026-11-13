@@ -25,6 +25,13 @@ def _read_poses(motion_csv, n_frames):
     return rotations, centers
 
 
+def _remove_far_points(points, colors, keep_percent=98):
+    """Drop the points furthest from the cloud's centre (bad triangulations)."""
+    distance = np.linalg.norm(points - np.median(points, axis=0), axis=1)
+    keep = distance <= np.percentile(distance, keep_percent)
+    return points[keep], colors[keep]
+
+
 def _write_ply(path, points, colors):
     vertices = np.empty(len(points), dtype=[
         ("x", "<f4"), ("y", "<f4"), ("z", "<f4"),
@@ -179,5 +186,6 @@ def reconstruct_dense_cloud(video_path, k_path, d_path, motion_csv, output_path,
         raise RuntimeError(f"No valid 3D points reconstructed for {video_path}.")
     points = np.vstack(all_points)
     colors = np.vstack(all_colors)
+    points, colors = _remove_far_points(points, colors)
     _write_ply(output_path, points, colors)
     return {"points": len(points), "output": str(output_path)}
