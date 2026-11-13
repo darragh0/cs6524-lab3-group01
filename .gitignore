@@ -12,3 +12,4 @@ __pycache__/
 .venv/
 pyproject.toml
 uv.lock
+*.synctex.gz
