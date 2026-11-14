@@ -121,6 +121,12 @@ On video A, a larger focal length found slightly fewer camera motions but kept m
 Turning off undistortion gave more points in every run, with the same or lower error. This is likely a problem with our calibration. It puts the image centre at (324, 173), but our videos are 478 by 850 pixels, so the real centre is around (239, 425). The calibration was probably done at a different resolution or orientation, so correcting the frames with it might warp them and lose matches.
 
 \section{Discussion and Failure Analysis}
+The pipeline ran end to end on both videos, but the reconstruction failed: the knight cannot be recognised in any of the point clouds (Fig.~\ref{fig:clouds}). The low reprojection errors in Step 4 (under 0.25 pixels) only show that the 3D points land back where they were seen in the two frames. They do not show that the overall shape is correct.
 
+We think there are three main reasons. Firstly, the knight takes up a small part of each frame, so most matches are on the carpet, the cabinet and the person in the background (Fig.~\ref{fig:matches}), and the reconstruction mainly consists of those rather than the knight. Secondly, Step 3 only gives the direction the camera moved and not the distance it moved, so small errors in each pair aggregate as the frames are chained together, which smears the shape. Finally, our calibration does not seem to match the videos, since turning off undistortion improved every run (Step 7).
+
+Video B was worse than video A: only 108/578 frame pairs gave a usable camera motion, compared with 395/448. In video B the camera stays still and only the knight turns, but most matched points are on the background, which does not move.
+
+With more time, we would recalibrate the camera at the same resolution and orientation as the videos, film the knight much closer so it fills the frame, and mask out the background so only points on the knight are used. For video B this masking would be very useful, since the background is what breaks Step 3.
 
 \end{document}
